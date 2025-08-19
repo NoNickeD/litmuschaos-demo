@@ -1,0 +1,67 @@
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: nginx-chaos-memory-hog
+  namespace: demo-app
+  annotations:
+    probeRef: '[{"name":"check-nginx-availability","mode":"Continuous"},{"name":"check-memory-metrics","mode":"Edge"}]'
+  labels:
+    app.kubernetes.io/name: nginx-chaos-memory-hog
+    app.kubernetes.io/part-of: litmus
+spec:
+  engineState: 'active'
+  appinfo:
+    appns: 'demo-app'
+    applabel: 'app=nginx'
+    appkind: 'deployment'
+  chaosServiceAccount: pod-delete-sa
+  jobCleanUpPolicy: retain
+  experiments:
+    - name: pod-memory-hog
+      spec:
+        components:
+          env:
+            # Memory stress duration (in seconds)
+            - name: TOTAL_CHAOS_DURATION
+              value: '60'
+            # Memory consumption in MB
+            - name: MEMORY_CONSUMPTION
+              value: '90'
+            # Number of memory workers
+            - name: NUMBER_OF_WORKERS
+              value: '1'
+            # Percentage of pods to target
+            - name: PODS_AFFECTED_PERC
+              value: '50'
+            # Target specific container
+            - name: TARGET_CONTAINER
+              value: 'nginx'
+        probe:
+          - name: "check-nginx-availability"
+            type: "httpProbe"
+            mode: "Continuous"
+            runProperties:
+              probeTimeout: 10s
+              interval: 5s
+              retry: 3
+              probePollingInterval: 5s
+            httpProbe/inputs:
+              url: "http://nginx-service.demo-app.svc.cluster.local"
+              method:
+                get:
+                  criteria: "=="
+                  responseCode: "200"
+          - name: "check-memory-metrics"
+            type: "cmdProbe"
+            mode: "Edge"
+            runProperties:
+              probeTimeout: 30s
+              interval: 10s
+              retry: 3
+            cmdProbe/inputs:
+              command: |
+                kubectl top pod -n demo-app --no-headers | grep nginx-demo | awk '{print $3}' | head -1 | sed 's/Mi//'
+              comparator:
+                type: "int"
+                criteria: ">="
+                value: "70"

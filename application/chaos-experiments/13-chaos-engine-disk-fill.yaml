@@ -1,0 +1,70 @@
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: nginx-chaos-disk-fill
+  namespace: demo-app
+  annotations:
+    probeRef: '[{"name":"check-nginx-availability","mode":"Continuous"},{"name":"check-disk-usage","mode":"Edge"}]'
+  labels:
+    app.kubernetes.io/name: nginx-chaos-disk-fill
+    app.kubernetes.io/part-of: litmus
+spec:
+  engineState: 'active'
+  appinfo:
+    appns: 'demo-app'
+    applabel: 'app=nginx'
+    appkind: 'deployment'
+  chaosServiceAccount: pod-delete-sa
+  jobCleanUpPolicy: retain
+  experiments:
+    - name: disk-fill
+      spec:
+        components:
+          env:
+            # Disk fill duration (in seconds)
+            - name: TOTAL_CHAOS_DURATION
+              value: '60'
+            # Percentage of disk to fill
+            - name: FILL_PERCENTAGE
+              value: '80'
+            # Size in MiB to fill
+            - name: EPHEMERAL_STORAGE_MEBIBYTES
+              value: '256'
+            # Block size for writing
+            - name: DATA_BLOCK_SIZE
+              value: '256'
+            # Percentage of pods to target
+            - name: PODS_AFFECTED_PERC
+              value: '50'
+            # Target specific container
+            - name: TARGET_CONTAINER
+              value: 'nginx'
+        probe:
+          - name: "check-nginx-availability"
+            type: "httpProbe"
+            mode: "Continuous"
+            runProperties:
+              probeTimeout: 10s
+              interval: 5s
+              retry: 3
+              probePollingInterval: 5s
+            httpProbe/inputs:
+              url: "http://nginx-service.demo-app.svc.cluster.local"
+              method:
+                get:
+                  criteria: "=="
+                  responseCode: "200"
+          - name: "check-disk-usage"
+            type: "cmdProbe"
+            mode: "Edge"
+            runProperties:
+              probeTimeout: 30s
+              interval: 15s
+              retry: 3
+            cmdProbe/inputs:
+              command: |
+                kubectl exec -n demo-app $(kubectl get pods -n demo-app -l app=nginx -o jsonpath='{.items[0].metadata.name}') -- df -h / | tail -1 | awk '{print $5}' | sed 's/%//'
+              comparator:
+                type: "int"
+                criteria: ">="
+                value: "70"

@@ -1,0 +1,50 @@
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: nginx-chaos-pod-delete
+  namespace: demo-app
+  annotations:
+    probeRef: '[{"name":"check-nginx-availability","mode":"Continuous"}]'
+  labels:
+    app.kubernetes.io/name: nginx-chaos-pod-delete
+    app.kubernetes.io/part-of: litmus
+spec:
+  engineState: 'active'
+  appinfo:
+    appns: 'demo-app'
+    applabel: 'app=nginx'
+    appkind: 'deployment'
+  chaosServiceAccount: pod-delete-sa
+  jobCleanUpPolicy: retain
+  experiments:
+    - name: pod-delete
+      spec:
+        components:
+          env:
+            # Set chaos duration (in seconds)
+            - name: TOTAL_CHAOS_DURATION
+              value: '30'
+            # Set chaos interval (in seconds)
+            - name: CHAOS_INTERVAL
+              value: '10'
+            # Percentage of pods to target
+            - name: PODS_AFFECTED_PERC
+              value: '33'
+            # Force delete pods
+            - name: FORCE
+              value: 'false'
+        probe:
+          - name: "check-nginx-availability"
+            type: "httpProbe"
+            mode: "Continuous"
+            runProperties:
+              probeTimeout: 10s
+              interval: 5s
+              retry: 3
+              probePollingInterval: 5s
+            httpProbe/inputs:
+              url: "http://nginx-service.demo-app.svc.cluster.local"
+              method:
+                get:
+                  criteria: "=="
+                  responseCode: "200"

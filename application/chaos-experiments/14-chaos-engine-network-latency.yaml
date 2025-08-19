@@ -1,0 +1,59 @@
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: nginx-chaos-network-latency
+  namespace: demo-app
+  annotations:
+    probeRef: '[{"name":"check-nginx-response-time","mode":"Continuous"}]'
+  labels:
+    app.kubernetes.io/name: nginx-chaos-network-latency
+    app.kubernetes.io/part-of: litmus
+spec:
+  engineState: 'active'
+  appinfo:
+    appns: 'demo-app'
+    applabel: 'app=nginx'
+    appkind: 'deployment'
+  chaosServiceAccount: pod-delete-sa
+  jobCleanUpPolicy: retain
+  experiments:
+    - name: pod-network-latency
+      spec:
+        components:
+          env:
+            # Network interface to target
+            - name: NETWORK_INTERFACE
+              value: 'eth0'
+            # Latency to be injected in milliseconds
+            - name: NETWORK_LATENCY
+              value: '1000'
+            # Jitter in milliseconds
+            - name: JITTER
+              value: '100'
+            # Chaos duration in seconds
+            - name: TOTAL_CHAOS_DURATION
+              value: '60'
+            # Percentage of pods to target
+            - name: PODS_AFFECTED_PERC
+              value: '50'
+            # Container runtime
+            - name: CONTAINER_RUNTIME
+              value: 'containerd'
+            # Socket path for container runtime
+            - name: SOCKET_PATH
+              value: '/run/containerd/containerd.sock'
+        probe:
+          - name: "check-nginx-response-time"
+            type: "httpProbe"
+            mode: "Continuous"
+            runProperties:
+              probeTimeout: 5s
+              interval: 10s
+              retry: 3
+              probePollingInterval: 5s
+            httpProbe/inputs:
+              url: "http://nginx-service.demo-app.svc.cluster.local"
+              method:
+                get:
+                  criteria: "=="
+                  responseCode: "200"

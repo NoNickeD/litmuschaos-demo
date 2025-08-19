@@ -1,0 +1,124 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: prometheus
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    chart: prometheus
+    targetRevision: 27.30.0
+    helm:
+      values: |
+        server:
+          persistentVolume:
+            enabled: true
+            size: 50Gi
+            storageClass: "managed-csi"
+          retention: "30d"
+          service:
+            type: ClusterIP
+          resources:
+            limits:
+              cpu: 2000m
+              memory: 4Gi
+            requests:
+              cpu: 1000m
+              memory: 2Gi
+          global:
+            scrape_interval: 30s
+            evaluation_interval: 30s
+          extraScrapeConfigs: |
+            # Scrape config for demo-app pods
+            - job_name: 'demo-app-pods'
+              kubernetes_sd_configs:
+              - role: pod
+                namespaces:
+                  names:
+                  - demo-app
+              relabel_configs:
+              - source_labels: [__meta_kubernetes_pod_label_app]
+                action: keep
+                regex: nginx
+              - source_labels: [__meta_kubernetes_pod_name]
+                target_label: pod
+              - source_labels: [__meta_kubernetes_namespace]
+                target_label: namespace
+            
+            # Scrape config for litmus chaos experiments
+            - job_name: 'litmus-chaos-experiments'
+              kubernetes_sd_configs:
+              - role: pod
+                namespaces:
+                  names:
+                  - demo-app
+                  - litmus
+              relabel_configs:
+              - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_part_of]
+                action: keep
+                regex: litmus
+              - source_labels: [__meta_kubernetes_pod_name]
+                target_label: pod
+              - source_labels: [__meta_kubernetes_namespace]
+                target_label: namespace
+              - source_labels: [__meta_kubernetes_pod_label_name]
+                target_label: experiment_name
+        
+        alertmanager:
+          enabled: true
+          persistentVolume:
+            enabled: true
+            size: 10Gi
+            storageClass: "managed-csi"
+          resources:
+            limits:
+              cpu: 500m
+              memory: 512Mi
+            requests:
+              cpu: 200m
+              memory: 256Mi
+        
+        nodeExporter:
+          enabled: true
+          resources:
+            limits:
+              cpu: 250m
+              memory: 256Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+        
+        pushgateway:
+          enabled: false
+        
+        kubeStateMetrics:
+          enabled: true
+          resources:
+            limits:
+              cpu: 200m
+              memory: 256Mi
+            requests:
+              cpu: 50m
+              memory: 128Mi
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        maxDuration: 3m0s
+        factor: 2

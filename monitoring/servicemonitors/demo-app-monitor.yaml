@@ -1,0 +1,42 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: demo-app-monitor
+  namespace: monitoring
+  labels:
+    app: demo-app
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: nginx
+  namespaceSelector:
+    matchNames:
+      - demo-app
+  endpoints:
+    - port: http
+      interval: 15s
+      path: /metrics
+      honorLabels: true
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: litmus-chaos-monitor
+  namespace: monitoring
+  labels:
+    app: litmus-chaos
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: litmus
+  namespaceSelector:
+    matchNames:
+      - demo-app
+      - litmus
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics
+      honorLabels: true

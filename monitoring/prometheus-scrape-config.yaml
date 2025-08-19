@@ -1,0 +1,75 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-server-conf-ext
+  namespace: monitoring
+  labels:
+    name: prometheus-server-conf-ext
+data:
+  additional-scrape-configs.yml: |
+    # Scrape config for demo-app pods
+    - job_name: 'demo-app-pods'
+      kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+          - demo-app
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        action: keep
+        regex: nginx
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+    
+    # Scrape config for litmus chaos experiments
+    - job_name: 'litmus-chaos-experiments'
+      kubernetes_sd_configs:
+      - role: pod
+        namespaces:
+          names:
+          - demo-app
+          - litmus
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_part_of]
+        action: keep
+        regex: litmus
+      - source_labels: [__meta_kubernetes_pod_name]
+        target_label: pod
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+      - source_labels: [__meta_kubernetes_pod_label_name]
+        target_label: experiment_name
+    
+    # Scrape config for chaos exporter
+    - job_name: 'chaos-exporter'
+      kubernetes_sd_configs:
+      - role: service
+        namespaces:
+          names:
+          - litmus
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name]
+        action: keep
+        regex: chaos-exporter
+      - source_labels: [__meta_kubernetes_service_name]
+        target_label: service
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace
+    
+    # Scrape config for litmus event tracker
+    - job_name: 'litmus-event-tracker'
+      kubernetes_sd_configs:
+      - role: service
+        namespaces:
+          names:
+          - litmus
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_service_label_app]
+        action: keep
+        regex: event-tracker
+      - source_labels: [__meta_kubernetes_service_name]
+        target_label: service
+      - source_labels: [__meta_kubernetes_namespace]
+        target_label: namespace

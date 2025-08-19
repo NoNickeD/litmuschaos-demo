@@ -1,0 +1,58 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: litmuschaos
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://litmuschaos.github.io/litmus-helm/
+    chart: litmus
+    targetRevision: 3.20.0
+    helm:
+      values: |
+        adminConfig:
+          ADMIN_USERNAME: "admin"
+          ADMIN_PASSWORD: "Litmus124!"
+          VERSION: "3.20.0"
+          
+        portal:
+          frontend:
+            service:
+              type: ClusterIP  # Use port-forward for access
+              port: 9091
+          server:
+            service:
+              graphqlServerPort: 8080
+              authServerPort: 3000
+              
+        mongodb:
+          enabled: true
+          persistence:
+            enabled: true
+            size: 20Gi
+            
+        ingress:
+          enabled: false
+            
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: litmus
+    
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+        
+  revisionHistoryLimit: 10
